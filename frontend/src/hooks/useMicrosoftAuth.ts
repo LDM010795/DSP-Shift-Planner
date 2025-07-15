@@ -77,7 +77,9 @@ export const useMicrosoftAuth = (): UseMicrosoftAuthReturn => {
       // Annahme für dieses Projekt
       const effectiveToolSlug = "shift-planner";
 
-      console.log(`🚀 Starte Microsoft Authentication für Tool: ${effectiveToolSlug}...`);
+      console.log(
+        `🚀 Starte Microsoft Authentication für Tool: ${effectiveToolSlug}...`
+      );
 
       const authResponse = await authenticateWithMicrosoft({
         code,
@@ -86,7 +88,9 @@ export const useMicrosoftAuth = (): UseMicrosoftAuthReturn => {
       });
 
       if (!authResponse.success) {
-        throw new Error(authResponse.message || "Microsoft authentication failed");
+        throw new Error(
+          authResponse.message || "Microsoft authentication failed"
+        );
       }
 
       // Alle Validierungen (Employee-Existenz, Tool-Zugriff) passieren jetzt im Backend.

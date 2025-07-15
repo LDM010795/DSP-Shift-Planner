@@ -1,27 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#eff6ff',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-        },
-        dsp: {
-          orange: '#ff863d',
-          'orange-dark': '#ed7c34',
-        }
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
-    },
-  },
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  // Keine theme.extend - alles wird über @theme in index.css definiert
   plugins: [],
-} 
+};

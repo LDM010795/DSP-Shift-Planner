@@ -107,64 +107,79 @@ const AttendancePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 mr-4">
-            Anwesenheit {format(monthDate, "MMMM yyyy")}
-          </h2>
-          {isAdmin && (
-            <>
-              <select
-                value={selectedDeptId?.toString() || ""}
-                onChange={(e) => setSelectedDeptId(Number(e.target.value))}
-                className="px-3 py-1 border rounded bg-white mr-4"
-              >
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id.toString()}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              {selectedDeptId && (
-                <span className="text-gray-600 mr-4 italic">
-                  Abteilung:{" "}
-                  {departments.find((d) => d.id === selectedDeptId)?.name}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-4">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              Anwesenheit {format(monthDate, "MMMM yyyy")}
+            </h2>
+            <div className="flex items-center space-x-4">
+              {isAdmin && (
+                <>
+                  <select
+                    value={selectedDeptId?.toString() || ""}
+                    onChange={(e) => setSelectedDeptId(Number(e.target.value))}
+                    className="px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dsp-orange focus:border-transparent"
+                  >
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id.toString()}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedDeptId && (
+                    <span className="text-gray-600 text-sm italic">
+                      Abteilung:{" "}
+                      {departments.find((d) => d.id === selectedDeptId)?.name}
+                    </span>
+                  )}
+                </>
+              )}
+              {!isAdmin && (
+                <span className="text-gray-600 text-sm italic">
+                  Abteilung: {employee?.department.name}
                 </span>
               )}
-            </>
-          )}
-          {!isAdmin && (
-            <span className="text-gray-600 mr-4 italic">
-              Abteilung: {employee?.department.name}
-            </span>
-          )}
-          <div className="space-x-2">
+            </div>
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center">
             <button
               onClick={() => setMonthDate((prev) => addMonths(prev, -1))}
-              className="px-3 py-1 bg-white border rounded shadow hover:bg-gray-50"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-dsp-orange focus:border-transparent"
             >
               ← Vorheriger Monat
             </button>
             <button
               onClick={() => setMonthDate((prev) => addMonths(prev, 1))}
-              className="px-3 py-1 bg-white border rounded shadow hover:bg-gray-50"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-dsp-orange focus:border-transparent"
             >
               Nächster Monat →
             </button>
           </div>
         </div>
 
+        {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-10">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
+          <div className="bg-white rounded-lg shadow-sm border p-8">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-dsp-orange-light border-t-dsp-orange"></div>
+              <span className="ml-3 text-gray-600">
+                Lade Anwesenheitsdaten...
+              </span>
+            </div>
           </div>
         ) : (
-          <MonthAttendanceTable
-            monthDate={monthDate}
-            attendances={attendances}
-            onChange={handleHoursChange}
-          />
+          <div className="bg-white rounded-lg shadow-sm border">
+            <MonthAttendanceTable
+              monthDate={monthDate}
+              attendances={attendances}
+              onChange={handleHoursChange}
+            />
+          </div>
         )}
       </div>
     </div>

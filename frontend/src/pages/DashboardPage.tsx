@@ -35,7 +35,7 @@ const DashboardPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-dsp-orange-light border-t-dsp-orange mx-auto mb-4"></div>
           <p className="text-gray-600">Lade Mitarbeiterdaten...</p>
         </div>
       </div>
@@ -47,7 +47,7 @@ const DashboardPage: React.FC = () => {
       title: "Anwesenheit",
       description: "Arbeitszeiten erfassen",
       icon: CalendarCheck,
-      color: "bg-teal-500",
+      color: "bg-dsp-orange",
       action: () => navigate("/attendance"),
       comingSoon: false,
     },
@@ -79,7 +79,7 @@ const DashboardPage: React.FC = () => {
       title: "Statistiken",
       description: "Arbeitsstunden und Trends analysieren",
       icon: TrendingUp,
-      color: "bg-orange-500",
+      color: "bg-indigo-500",
       action: () => console.log("Navigate to statistics"),
       comingSoon: true,
     },
@@ -99,7 +99,7 @@ const DashboardPage: React.FC = () => {
           title: "Abteilungsplanung",
           description: "Übergreifende Schichtplanung für die Abteilung",
           icon: Building,
-          color: "bg-indigo-500",
+          color: "bg-gray-600",
           action: () => console.log("Navigate to department planning"),
           comingSoon: true,
         },
@@ -115,7 +115,7 @@ const DashboardPage: React.FC = () => {
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="flex items-center">
-                  <Calendar className="w-8 h-8 text-blue-600" />
+                  <Calendar className="w-8 h-8 text-dsp-orange" />
                   <h1 className="ml-3 text-xl font-bold text-gray-900">
                     DSP Shift-Planner
                   </h1>
@@ -133,7 +133,7 @@ const DashboardPage: React.FC = () => {
                     {employee.position.title} • {employee.department.name}
                   </p>
                 </div>
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <div className="w-8 h-8 bg-dsp-orange rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
                     {employee.first_name[0]}
                     {employee.last_name[0]}
@@ -156,21 +156,21 @@ const DashboardPage: React.FC = () => {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {/* Welcome Section */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 mb-8">
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
             <div className="flex items-center justify-between">
-              <div className="text-white">
-                <h2 className="text-2xl font-bold mb-2">
-                  Willkommen, {employee.first_name}! 👋
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-1">
+                  Willkommen, {employee.first_name}
                 </h2>
-                <p className="text-blue-100">
-                  Verwalten Sie Ihre Schichten intelligent und effizient.
+                <p className="text-gray-600 text-sm">
+                  Schichtmanagement-Tool für DSP-Mitarbeiter
                 </p>
               </div>
               <div className="hidden md:block">
-                <div className="bg-white/10 rounded-lg p-4">
-                  <div className="flex items-center text-white">
-                    <Clock className="w-5 h-5 mr-2" />
-                    <span className="text-sm">
+                <div className="bg-dsp-orange-light rounded-lg p-3">
+                  <div className="flex items-center text-gray-900">
+                    <Clock className="w-4 h-4 mr-2 text-dsp-orange" />
+                    <span className="text-sm font-medium">
                       Max. {employee.max_working_hours}h/Woche
                     </span>
                   </div>
@@ -180,43 +180,43 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Employee Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <UserCheck className="w-8 h-8 text-green-600" />
+                  <UserCheck className="w-6 h-6 text-green-600" />
                 </div>
-                <div className="ml-4">
+                <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Status</p>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-base font-semibold text-gray-900">
                     {employee.is_active ? "Aktiv" : "Inaktiv"}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <Building className="w-8 h-8 text-blue-600" />
+                  <Building className="w-6 h-6 text-blue-600" />
                 </div>
-                <div className="ml-4">
+                <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Abteilung</p>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-base font-semibold text-gray-900">
                     {employee.department.name}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-lg shadow-sm border p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <Badge className="w-8 h-8 text-purple-600" />
+                  <Badge className="w-6 h-6 text-purple-600" />
                 </div>
-                <div className="ml-4">
+                <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Position</p>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-base font-semibold text-gray-900">
                     {employee.position.title}
                   </p>
                 </div>
@@ -225,7 +225,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Quick Actions */}
-          <div className="mb-8">
+          <div className="mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">
               Schnellzugriff
             </h3>
@@ -238,7 +238,7 @@ const DashboardPage: React.FC = () => {
                     onClick={action.action}
                     disabled={action.comingSoon}
                     className={`
-                      relative p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 text-left
+                      relative p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200 text-left
                       ${
                         action.comingSoon
                           ? "opacity-75 cursor-not-allowed"
@@ -254,11 +254,11 @@ const DashboardPage: React.FC = () => {
                       </div>
                     )}
                     <div
-                      className={`inline-flex items-center justify-center w-12 h-12 ${action.color} rounded-lg mb-4`}
+                      className={`inline-flex items-center justify-center w-10 h-10 ${action.color} rounded-lg mb-3`}
                     >
-                      <Icon className="w-6 h-6 text-white" />
+                      <Icon className="w-5 h-5 text-white" />
                     </div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">
+                    <h4 className="text-base font-medium text-gray-900 mb-1">
                       {action.title}
                     </h4>
                     <p className="text-sm text-gray-500">
@@ -272,7 +272,7 @@ const DashboardPage: React.FC = () => {
 
           {/* Admin Actions */}
           {adminActions.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Verwaltung
               </h3>
@@ -285,7 +285,7 @@ const DashboardPage: React.FC = () => {
                       onClick={action.action}
                       disabled={action.comingSoon}
                       className={`
-                        relative p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 text-left
+                        relative p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200 text-left
                         ${
                           action.comingSoon
                             ? "opacity-75 cursor-not-allowed"
@@ -301,11 +301,11 @@ const DashboardPage: React.FC = () => {
                         </div>
                       )}
                       <div
-                        className={`inline-flex items-center justify-center w-12 h-12 ${action.color} rounded-lg mb-4`}
+                        className={`inline-flex items-center justify-center w-10 h-10 ${action.color} rounded-lg mb-3`}
                       >
-                        <Icon className="w-6 h-6 text-white" />
+                        <Icon className="w-5 h-5 text-white" />
                       </div>
-                      <h4 className="text-lg font-medium text-gray-900 mb-2">
+                      <h4 className="text-base font-medium text-gray-900 mb-1">
                         {action.title}
                       </h4>
                       <p className="text-sm text-gray-500">
@@ -318,25 +318,25 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* Coming Soon Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          {/* Development Notice */}
+          <div className="bg-dsp-orange-light border border-dsp-orange-medium rounded-lg p-4">
             <div className="flex items-start">
-              <Settings className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
-              <div className="ml-4">
-                <h4 className="text-lg font-medium text-blue-900 mb-2">
+              <Settings className="w-5 h-5 text-dsp-orange mt-0.5 flex-shrink-0" />
+              <div className="ml-3">
+                <h4 className="text-base font-medium text-gray-900 mb-2">
                   Entwicklung in vollem Gange
                 </h4>
-                <p className="text-blue-700 mb-4">
+                <p className="text-gray-700 mb-3 text-sm">
                   Der DSP Shift-Planner wird derzeit entwickelt. Die
                   Schichtplanungs-Features werden schrittweise verfügbar
                   gemacht. Sie können sich bereits anmelden und Ihre
                   Mitarbeiterdaten werden automatisch synchronisiert.
                 </p>
-                <div className="bg-white rounded-lg p-4 border border-blue-200">
-                  <h5 className="font-medium text-blue-900 mb-2">
+                <div className="bg-white rounded-lg p-3 border border-dsp-orange-medium">
+                  <h5 className="font-medium text-gray-900 mb-2 text-sm">
                     Geplante Features:
                   </h5>
-                  <ul className="text-sm text-blue-700 space-y-1">
+                  <ul className="text-sm text-gray-700 space-y-1">
                     <li>• Interaktive Schichtplanung</li>
                     <li>• Team-Kalender mit Kollegen-Übersicht</li>
                     <li>• Automatische Stundenberechnung</li>
