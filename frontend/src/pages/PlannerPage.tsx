@@ -8,18 +8,28 @@ import {
   type ScheduleData,
   isBerlinHoliday,
 } from "../lib/utils";
-import { useShallowCallback } from "../lib/performanceUtils";
+// useShallowCallback entfernt – Standard useCallback genügt hier
+import { useAuth } from "../context/AuthContext";
+import {
+  upsertAvailability,
+  upsertSchedule,
+  fetchAvailabilities,
+  fetchSchedules,
+  type AvailabilityDto,
+  type ScheduleDto,
+} from "../services/shiftPlannerApi";
 
-const mockEmployees = [
-  "Max Mustermann",
-  "Anna Schmidt",
-  "Tom Weber",
-  "Lisa Müller",
-  "Peter Klein",
-  "Sarah Johnson",
-  "Mike Johnson",
-  "Emma Brown",
-];
+type EmployeeDto = {
+  id: number;
+  full_name: string;
+  max_working_hours: number;
+  position_title: string;
+  department: number;
+  department_name: string;
+};
+
+const EMPLOYEE_API_URL =
+  import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
 
 interface PlannerPageProps {
   isAdmin: boolean;
@@ -48,12 +58,134 @@ export default function PlannerPage({
   currentTab,
   onTabChange,
 }: PlannerPageProps) {
-  const [isSaving, setIsSaving] = useState(false);
+  const { user, employee: loggedEmployee } = useAuth();
+  const currentUserFullName = user
+    ? `${user.first_name} ${user.last_name}`
+    : "";
+
+  // Mitarbeiter aus Backend
+  const [employees, setEmployees] = useState<EmployeeDto[]>([]);
+  const [selectedDept, setSelectedDept] = useState<number | "all">(
+    loggedEmployee?.department.id ?? "all"
+  );
+
+  // Falls Employee später geladen wird, Standardabteilung nachziehen
+  useEffect(() => {
+    if (loggedEmployee && selectedDept === "all") {
+      setSelectedDept(loggedEmployee.department.id);
+    }
+  }, [loggedEmployee]);
+
+  const departments: Array<[number, string]> = Array.from(
+    new Map(employees.map((e) => [e.department, e.department_name])).entries()
+  );
+
+  // Läd Verfügbarkeiten sobald Mitarbeiter geladen oder Monat gewechselt wird
+  useEffect(() => {
+    const loadAvailabilities = async () => {
+      if (employees.length === 0) return;
+
+      // Optional: Nur Einträge dieses Monats laden und Client-seitig filtern
+      const data: AvailabilityDto[] = await fetchAvailabilities();
+
+      const month = currentMonth.getMonth();
+      const year = currentMonth.getFullYear();
+
+      const mapped: AvailabilityData = {};
+
+      data.forEach((item) => {
+        const dateObj = new Date(item.date);
+        if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month) {
+          return; // ignore anderer Monat
+        }
+
+        const emp = employees.find((e) => e.id === item.employee);
+        if (!emp) return;
+
+        const name = emp.full_name;
+        if (!mapped[name]) mapped[name] = {};
+        mapped[name][item.date] = item.status;
+      });
+
+      setAvailabilityData(mapped);
+    };
+
+    loadAvailabilities();
+  }, [employees, currentMonth]);
+
+  // Läd Schichtpläne sobald Mitarbeiter geladen oder Monat gewechselt wird
+  useEffect(() => {
+    const loadSchedules = async () => {
+      if (employees.length === 0) return;
+
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(
+        new Date(year, month + 1, 0).getDate()
+      ).padStart(2, "0")}`;
+
+      const data: ScheduleDto[] = await fetchSchedules({
+        date__gte: startDate,
+        date__lte: endDate,
+      });
+
+      const mapped: ScheduleData = {};
+
+      data.forEach((item) => {
+        const emp = employees.find((e) => e.id === item.employee);
+        if (!emp) return;
+
+        const name = emp.full_name;
+        if (!mapped[name]) mapped[name] = {};
+        mapped[name][item.date] = {
+          shift: item.shift_type,
+          hours: item.hours,
+          activity: item.activity,
+          groups: item.groups,
+        };
+      });
+
+      setScheduleData(mapped);
+    };
+
+    loadSchedules();
+  }, [employees, currentMonth]);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await fetch(
+          `${EMPLOYEE_API_URL}/api/shift-planner/employees/`
+        );
+        if (!res.ok) throw new Error("Fehler beim Laden der Mitarbeiter");
+        const data: EmployeeDto[] = await res.json();
+        setEmployees(data);
+      } catch (err) {
+        console.error(err);
+        window.dispatchEvent(
+          new CustomEvent("showToast", {
+            detail: {
+              message: "Mitarbeiter konnten nicht geladen werden",
+              type: "error",
+            },
+          })
+        );
+      }
+    };
+
+    fetchEmployees();
+  }, []);
 
   const dates = generateMonthDates(currentMonth);
 
+  const filteredEmployees =
+    selectedDept === "all"
+      ? employees
+      : employees.filter((e) => e.department === selectedDept);
+
   // Performance: Optimized availability handlers
-  const handleAvailabilityChange = useShallowCallback(
+  const handleAvailabilityChange = useCallback(
     (employee: string, date: string, status: "available" | "unavailable") => {
       setAvailabilityData((prev) => ({
         ...prev,
@@ -62,30 +194,24 @@ export default function PlannerPage({
           [date]: status,
         },
       }));
+
+      // Persist sofort (Fire-and-Forget)
+      const emp = employees.find((e) => e.full_name === employee);
+      if (emp) {
+        upsertAvailability(emp.id, date, status);
+      }
     },
-    [setAvailabilityData]
+    [setAvailabilityData, employees]
   );
-
-  const handleAvailabilitySave = useCallback(async () => {
-    setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSaving(false);
-
-    const event = new CustomEvent("showToast", {
-      detail: {
-        message: "Verfügbarkeiten erfolgreich gespeichert! ✅",
-        type: "success",
-      },
-    });
-    window.dispatchEvent(event);
-  }, []);
 
   // Schedule handlers
   const handleScheduleChange = (
     employee: string,
     date: string,
     shift: "morning" | "evening" | "off" | "holiday" | "custom",
-    hours: string
+    hours: string,
+    activity?: "TA" | "D" | "D/TA" | "",
+    groups?: string
   ) => {
     // Nur Admins können Änderungen vornehmen
     if (!isAdmin) return;
@@ -102,19 +228,30 @@ export default function PlannerPage({
       return;
     }
 
-    // Nur erlauben wenn Verfügbarkeit vorhanden ist (außer bei Feiertagen)
-    const availability = availabilityData[employee]?.[date];
-    if (!availability || availability === "unavailable") {
-      return; // Keine Änderung erlaubt
+    // Wochenende-Sonderfall: Admin darf planen auch ohne Verfügbarkeit
+    const isWeekendDay = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
+
+    if (!isWeekendDay) {
+      // Für Werktage weiterhin Verfügbarkeitsprüfung
+      const availability = availabilityData[employee]?.[date];
+      if (!availability || availability === "unavailable") {
+        return; // Keine Änderung erlaubt
+      }
     }
 
     setScheduleData((prev) => ({
       ...prev,
       [employee]: {
         ...prev[employee],
-        [date]: { shift, hours },
+        [date]: { shift, hours, activity, groups },
       },
     }));
+
+    // persist immediately if admin
+    const emp = employees.find((e) => e.full_name === employee);
+    if (emp) {
+      upsertSchedule(emp.id, date, shift, hours, activity ?? "", groups ?? "");
+    }
 
     // Auto-save für Admin-Modus (nach kurzer Verzögerung)
     if (isAdmin) {
@@ -169,55 +306,77 @@ export default function PlannerPage({
         {/* Zentrale Tab Navigation */}
         <div className="bg-white/90 backdrop-blur-sm rounded-t-2xl border border-gray-200/50 border-b-0 p-4">
           <div className="flex items-center justify-center">
-            <div className="flex bg-gray-100 rounded-lg p-1 relative">
+            <div className="flex bg-gray-100 rounded-lg p-1 relative space-x-4 items-center">
+              {/* Department Selector */}
+              <select
+                value={selectedDept}
+                onChange={(e) => {
+                  const val =
+                    e.target.value === "all" ? "all" : Number(e.target.value);
+                  setSelectedDept(val);
+                }}
+                className="px-3 py-2 text-sm text-gray-700 rounded-md border border-gray-300 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-dsp-orange"
+              >
+                <option value="all">Alle Abteilungen</option>
+                {departments.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {/* Verfügbarkeiten Tab */}
               <motion.button
                 onClick={() => onTabChange("availability")}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`relative px-6 py-3 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`relative px-6 py-3 rounded-md text-sm font-medium transition-all duration-200 overflow-hidden ${
                   currentTab === "availability"
-                    ? "text-dsp-orange z-10"
+                    ? "text-dsp-orange"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                Verfügbarkeiten
+                {currentTab === "availability" && (
+                  <motion.div
+                    layoutId="centralTabBackground"
+                    className="absolute inset-0 bg-white shadow-sm rounded-md"
+                    initial={false}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 30,
+                      duration: 0.3,
+                    }}
+                  />
+                )}
+                <span className="relative z-10">Verfügbarkeiten</span>
               </motion.button>
+
+              {/* Schichtplan Tab */}
               <motion.button
                 onClick={() => onTabChange("schedule")}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`relative px-6 py-3 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`relative px-6 py-3 rounded-md text-sm font-medium transition-all duration-200 overflow-hidden ${
                   currentTab === "schedule"
-                    ? "text-dsp-orange z-10"
+                    ? "text-dsp-orange"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                Schichtplan
+                {currentTab === "schedule" && (
+                  <motion.div
+                    layoutId="centralTabBackground"
+                    className="absolute inset-0 bg-white shadow-sm rounded-md"
+                    initial={false}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 30,
+                      duration: 0.3,
+                    }}
+                  />
+                )}
+                <span className="relative z-10">Schichtplan</span>
               </motion.button>
-
-              {/* Animated Background */}
-              <motion.div
-                layoutId="centralTabBackground"
-                className="absolute bg-white shadow-sm rounded-md"
-                initial={false}
-                animate={{
-                  x: currentTab === "availability" ? 4 : "calc(50% + 2px)",
-                  width:
-                    currentTab === "availability"
-                      ? "calc(50% - 6px)"
-                      : "calc(50% - 6px)",
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 30,
-                  duration: 0.3,
-                }}
-                style={{
-                  top: 4,
-                  bottom: 4,
-                }}
-              />
             </div>
           </div>
         </div>
@@ -246,7 +405,7 @@ export default function PlannerPage({
             }}
           >
             <AvailabilityTable
-              employees={mockEmployees}
+              employees={filteredEmployees.map((e) => e.full_name)}
               dates={dates}
               availabilityData={availabilityData}
               onAvailabilityChange={handleAvailabilityChange}
@@ -254,8 +413,8 @@ export default function PlannerPage({
               onTabChange={onTabChange}
               currentMonth={currentMonth}
               onMonthChange={changeMonth}
-              onSave={handleAvailabilitySave}
-              isSaving={isSaving}
+              currentUser={currentUserFullName}
+              isAdmin={isAdmin}
             />
           </motion.div>
 
@@ -281,13 +440,14 @@ export default function PlannerPage({
             }}
           >
             <ScheduleTable
-              employees={mockEmployees}
+              employees={filteredEmployees.map((e) => e.full_name)}
               dates={dates}
               scheduleData={scheduleData}
               availabilityData={availabilityData}
               onScheduleChange={handleScheduleChange}
               isEditable={isAdmin}
               isAdmin={isAdmin}
+              currentUser={currentUserFullName}
               currentTab={currentTab}
               onTabChange={onTabChange}
               currentMonth={currentMonth}

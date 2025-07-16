@@ -11,6 +11,7 @@ import { useState, memo, useCallback } from "react";
 import type { ScheduleData, AvailabilityData } from "../lib/utils";
 import { isBerlinHoliday, getHolidayName, isWeekend } from "../lib/utils";
 import { useShallowCallback } from "../lib/performanceUtils";
+import ScheduleEditPopup from "./ScheduleEditPopup";
 
 interface ScheduleTableProps {
   employees: string[];
@@ -21,10 +22,13 @@ interface ScheduleTableProps {
     employee: string,
     date: string,
     shift: "morning" | "evening" | "off" | "holiday" | "custom",
-    hours: string
+    hours: string,
+    activity?: "TA" | "D" | "D/TA" | "",
+    groups?: string
   ) => void;
   isEditable: boolean;
   isAdmin: boolean;
+  currentUser: string;
   currentTab: "availability" | "schedule";
   onTabChange: (tab: "availability" | "schedule") => void;
   currentMonth: Date;
@@ -39,6 +43,7 @@ const ScheduleTable = memo(function ScheduleTable({
   onScheduleChange,
   isEditable,
   isAdmin,
+  currentUser,
   currentTab,
   onTabChange,
   currentMonth,
@@ -48,10 +53,14 @@ const ScheduleTable = memo(function ScheduleTable({
     employee: string;
     date: string;
   } | null>(null);
-  const [tempShift, setTempShift] = useState<"morning" | "evening" | "custom">(
-    "custom"
-  ); // Custom als Standard
-  const [tempHours, setTempHours] = useState("");
+  const [tempShift, setTempShift] = useState<
+    "morning" | "evening" | "off" | "holiday" | "custom"
+  >("custom");
+  const [tempHours, setTempHours] = useState<string>("");
+  const [tempActivity, setTempActivity] = useState<"TA" | "D" | "D/TA" | "">(
+    ""
+  );
+  const [tempGroups, setTempGroups] = useState<string>("");
   const [showLegend, setShowLegend] = useState(false);
 
   const getShiftColor = (
@@ -149,6 +158,63 @@ const ScheduleTable = memo(function ScheduleTable({
     }
   };
 
+  // HINZUFÜGUNG: Stunden-Mapping & Helfer für Überstunden-Berechnung
+  const SHIFT_HOURS: Record<
+    "morning" | "evening" | "off" | "holiday" | "custom",
+    number
+  > = {
+    morning: 8,
+    evening: 8,
+    off: 0,
+    holiday: 0,
+    custom: 0, // Wird durch individuelle Stunden überschrieben
+  };
+
+  // Hilfsfunktion: Bestimme Montag der Kalenderwoche als eindeutigen Key (YYYY-MM-DD)
+  const getWeekKey = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const day = date.getDay(); // Sonntag=0, Montag=1, ...
+    const diff = (day + 6) % 7; // Tage seit Montag
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - diff);
+    return monday.toISOString().split("T")[0];
+  };
+
+  const calculateWeeklyTotals = (employee: string): number[] => {
+    const empSchedule = scheduleData[employee] || {};
+    const weeklyTotals: Record<string, number> = {};
+
+    dates.forEach((dateStr) => {
+      const schedule = empSchedule[dateStr];
+      let hours = 0;
+      if (schedule) {
+        if (schedule.shift === "custom") {
+          const parsed = parseFloat(schedule.hours);
+          if (!isNaN(parsed)) hours = parsed;
+        } else {
+          hours = SHIFT_HOURS[schedule.shift] ?? 0;
+        }
+      }
+
+      const weekKey = getWeekKey(dateStr);
+      weeklyTotals[weekKey] = (weeklyTotals[weekKey] || 0) + hours;
+    });
+
+    return Object.values(weeklyTotals);
+  };
+
+  const getMaxHours = (employee: string): number => {
+    // Beispiel-Logik für Teilzeitkräfte – nach Bedarf anpassen
+    if (
+      employee.includes("Tom") ||
+      employee.includes("Jan") ||
+      employee.includes("Emma")
+    ) {
+      return 25;
+    }
+    return 40; // Standard Vollzeit
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const day = date.getDate();
@@ -162,7 +228,7 @@ const ScheduleTable = memo(function ScheduleTable({
     const isHoliday = isBerlinHoliday(date);
     const isWeekendDay = isWeekend(date);
 
-    // Feiertage haben immer Priorität
+    // Feiertage haben immer Priorität – weiterhin nicht editierbar
     if (isHoliday) {
       return {
         shift: "holiday" as const,
@@ -172,13 +238,15 @@ const ScheduleTable = memo(function ScheduleTable({
       };
     }
 
-    // Wochenenden sind nicht editierbar
+    // Wochenende: Für Admins editierbar, sonst gesperrt
     if (isWeekendDay) {
       return {
-        shift: "off" as const,
-        hours: "0h",
-        isClickable: false,
-        tooltip: "Wochenende - nicht editierbar",
+        shift: schedule?.shift ?? "off",
+        hours: schedule?.hours ?? "0h",
+        isClickable: isAdmin, // nur Admins dürfen
+        tooltip: isAdmin
+          ? "Wochenende – klick zum Planen"
+          : "Wochenende - nicht editierbar",
       };
     }
 
@@ -212,7 +280,7 @@ const ScheduleTable = memo(function ScheduleTable({
   };
 
   const getShiftDisplayName = (
-    shift: "morning" | "evening" | "off" | "holiday"
+    shift: "morning" | "evening" | "off" | "holiday" | "custom"
   ) => {
     switch (shift) {
       case "morning":
@@ -223,13 +291,15 @@ const ScheduleTable = memo(function ScheduleTable({
         return "Feiertag";
       case "off":
         return "Frei";
+      case "custom":
+        return "Flexible Zeit";
       default:
         return "Unbekannt";
     }
   };
 
   // Performance: Optimized cell click handler
-  const handleCellClick = useShallowCallback(
+  const handleCellClick = useCallback(
     (employee: string, date: string) => {
       const cellState = getCellState(employee, date);
 
@@ -238,25 +308,25 @@ const ScheduleTable = memo(function ScheduleTable({
       // Für Feiertage: keine Aktion
       if (isBerlinHoliday(date)) return;
 
-      if (cellState.shift === "off" && cellState.isClickable) {
-        // Neuen Termin planen
-        setEditingCell({ employee, date });
-        setTempShift("custom"); // Standard auf custom setzen
+      // Immer Popup öffnen, damit Werte angepasst werden können
+      setEditingCell({ employee, date });
+
+      // Vorbelegen mit aktuellem Zustand oder Defaults
+      if (cellState.shift === "off") {
+        setTempShift("custom");
         setTempHours("8");
+        setTempActivity("");
+        setTempGroups("");
       } else {
-        // Existierende Schicht durchschalten (ohne holiday)
-        const nextShift = getNextShift(cellState.shift);
-        if (nextShift !== "holiday") {
-          onScheduleChange(
-            employee,
-            date,
-            nextShift as any,
-            getShiftHours(nextShift)
-          );
-        }
+        setTempShift(cellState.shift as any);
+        setTempHours(cellState.hours.replace("h", ""));
+        // Hole aktuelle Werte aus scheduleData
+        const currentSchedule = scheduleData[employee]?.[date];
+        setTempActivity(currentSchedule?.activity || "");
+        setTempGroups(currentSchedule?.groups || "");
       }
     },
-    [onScheduleChange, tempShift, tempHours]
+    [onScheduleChange]
   );
 
   // Performance: Optimized edit handlers
@@ -267,15 +337,26 @@ const ScheduleTable = memo(function ScheduleTable({
       editingCell.employee,
       editingCell.date,
       tempShift,
-      tempHours
+      tempHours,
+      tempActivity,
+      tempGroups
     );
     setEditingCell(null);
-  }, [editingCell, tempShift, tempHours, onScheduleChange]);
+  }, [
+    editingCell,
+    tempShift,
+    tempHours,
+    tempActivity,
+    tempGroups,
+    onScheduleChange,
+  ]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingCell(null);
     setTempShift("custom"); // Zurück auf custom
     setTempHours("");
+    setTempActivity("");
+    setTempGroups("");
   }, []);
 
   return (
@@ -429,7 +510,7 @@ const ScheduleTable = memo(function ScheduleTable({
                             isHoliday
                               ? "text-purple-700 bg-purple-100/50"
                               : isWeekend
-                              ? "text-red-600 bg-red-50/60"
+                              ? "text-gray-500 bg-gray-100/50"
                               : "text-gray-900"
                           }`}
                           title={
@@ -450,93 +531,176 @@ const ScheduleTable = memo(function ScheduleTable({
                         </th>
                       );
                     })}
+                    {/* NEUE Kopfzeile für Wochenstunden */}
+                    <th className="px-4 py-4 text-center text-sm font-semibold text-gray-900 min-w-[130px] border-l border-gray-200/50">
+                      Ø&nbsp;Wochen­stunden
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50">
-                  {employees.map((employee, employeeIndex) => (
-                    <tr
-                      key={employee}
-                      className="hover:bg-gray-50/50 transition-colors duration-200"
-                    >
-                      <td className="sticky left-0 z-10 bg-white/90 backdrop-blur-sm px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-200/50">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-dsp-orange to-dsp-orange_medium rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            {employee
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                  {employees.map((employee, employeeIndex) => {
+                    // Map WeekKey -> hours to ermitteln, welche Wochen Überstunden haben
+                    const weekHours: Record<string, number> = {};
+                    dates.forEach((d) => {
+                      const weekKey = getWeekKey(d);
+                      const sched = scheduleData[employee]?.[d];
+                      let hrs = 0;
+                      if (sched) {
+                        if (sched.shift === "custom") {
+                          const p = parseFloat(sched.hours);
+                          if (!isNaN(p)) hrs = p;
+                        } else {
+                          hrs = SHIFT_HOURS[sched.shift];
+                        }
+                      }
+                      weekHours[weekKey] = (weekHours[weekKey] || 0) + hrs;
+                    });
+
+                    const maxHours = getMaxHours(employee);
+                    const overtimeWeeks = new Set(
+                      Object.entries(weekHours)
+                        .filter(([, h]) => h > maxHours)
+                        .map(([k]) => k)
+                    );
+
+                    const isOvertime = overtimeWeeks.size > 0;
+                    const averageWeekly =
+                      Object.values(weekHours).length > 0
+                        ? Object.values(weekHours).reduce((a, b) => a + b, 0) /
+                          Object.values(weekHours).length
+                        : 0;
+
+                    return (
+                      <tr
+                        key={employee}
+                        className={`transition-colors duration-200 ${
+                          employee === currentUser
+                            ? "bg-dsp-orange/10 hover:bg-dsp-orange/20"
+                            : "hover:bg-dsp-orange/5"
+                        }`}
+                      >
+                        <td className="sticky left-0 z-10 bg-white/90 backdrop-blur-sm px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-200/50">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-dsp-orange to-dsp-orange_medium rounded-full flex items-center justify-center text-white text-xs font-bold">
+                              {employee
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </div>
+                            <span>{employee}</span>
                           </div>
-                          <span>{employee}</span>
-                        </div>
-                      </td>
-                      {dates.map((date) => {
-                        const cellState = getCellState(employee, date);
-                        const isWeekend =
-                          new Date(date).getDay() === 0 ||
-                          new Date(date).getDay() === 6;
-                        const isHoliday = isBerlinHoliday(date);
+                        </td>
+                        {dates.map((date) => {
+                          const cellState = getCellState(employee, date);
+                          const weekKey = getWeekKey(date);
+                          const isOverWeek = overtimeWeeks.has(weekKey);
+                          const isWeekend =
+                            new Date(date).getDay() === 0 ||
+                            new Date(date).getDay() === 6;
+                          const isHoliday = isBerlinHoliday(date);
 
-                        return (
-                          <td
-                            key={`${employee}-${date}`}
-                            className={`px-2 py-3 ${
-                              isHoliday
-                                ? "bg-purple-100/30"
-                                : isWeekend
-                                ? "bg-red-50/40"
-                                : ""
-                            }`}
-                          >
-                            <motion.button
-                              onClick={() => handleCellClick(employee, date)}
-                              whileHover={
-                                cellState.isClickable
-                                  ? {
-                                      scale: 1.05,
-                                      y: -1,
-                                    }
-                                  : {}
-                              }
-                              whileTap={
-                                cellState.isClickable ? { scale: 0.95 } : {}
-                              }
-                              className={`w-full h-10 rounded-xl border-2 transition-all duration-200 flex items-center justify-center font-bold text-sm shadow-sm relative ${
-                                cellState.isClickable
-                                  ? "hover:shadow-md cursor-pointer"
-                                  : "cursor-not-allowed"
-                              } ${getShiftColor(cellState.shift)}`}
-                              title={cellState.tooltip}
-                              disabled={!cellState.isClickable}
+                          return (
+                            <td
+                              key={`${employee}-${date}`}
+                              className={`px-2 py-3 ${
+                                isHoliday
+                                  ? "bg-purple-100/30"
+                                  : isWeekend
+                                  ? "bg-gray-200/40"
+                                  : ""
+                              }`}
                             >
-                              <motion.span
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                key={cellState.shift}
-                                className="text-lg"
+                              <motion.button
+                                onClick={() => handleCellClick(employee, date)}
+                                whileHover={
+                                  cellState.isClickable
+                                    ? {
+                                        scale: 1.05,
+                                        y: -1,
+                                      }
+                                    : {}
+                                }
+                                whileTap={
+                                  cellState.isClickable ? { scale: 0.95 } : {}
+                                }
+                                className={`w-full h-20 rounded-xl border-2 transition-all duration-200 flex items-center justify-center font-bold text-sm shadow-sm relative ${
+                                  cellState.isClickable
+                                    ? "hover:shadow-md cursor-pointer"
+                                    : "cursor-not-allowed"
+                                } ${getShiftColor(cellState.shift)} ${
+                                  isWeekend && cellState.shift === "off"
+                                    ? "bg-gray-200 border-gray-300 text-gray-600"
+                                    : ""
+                                } ${
+                                  isAdmin && isOverWeek
+                                    ? "ring-2 ring-red-400"
+                                    : ""
+                                }`}
+                                title={cellState.tooltip}
+                                disabled={!cellState.isClickable}
                               >
-                                {getShiftLabel(cellState.shift)}
-                              </motion.span>
-
-                              {/* Edit Icon für verfügbare aber ungeplante Schichten */}
-                              {cellState.isClickable &&
-                                cellState.shift === "off" &&
-                                !isHoliday && (
-                                  <Edit className="w-3 h-3 absolute top-1 right-1 text-dsp-orange" />
-                                )}
-
-                              {/* Stunden-Anzeige */}
-                              {cellState.shift !== "off" &&
-                                cellState.shift !== "holiday" && (
-                                  <span className="absolute bottom-0 right-1 text-xs text-gray-500">
-                                    {cellState.hours}
+                                {/* 3-EBENEN DESIGN: Activity (oben), Groups (mitte), Hours (unten) */}
+                                <div className="flex flex-col items-center justify-center w-full h-full text-center">
+                                  {/* EBENE 1: Activity/Role Label (Oben) */}
+                                  <span className="text-sm font-bold mb-1">
+                                    {scheduleData[employee]?.[date]?.activity ||
+                                      getShiftLabel(cellState.shift)}
                                   </span>
-                                )}
-                            </motion.button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+
+                                  {/* EBENE 2: Groups (Mitte) */}
+                                  {cellState.shift !== "off" &&
+                                    cellState.shift !== "holiday" && (
+                                      <div className="mb-1 px-2 py-0.5 bg-white bg-opacity-50 rounded text-xs font-medium">
+                                        {scheduleData[employee]?.[date]
+                                          ?.groups || "-"}
+                                      </div>
+                                    )}
+
+                                  {/* EBENE 3: Hours (Unten) */}
+                                  {cellState.shift !== "off" &&
+                                    cellState.shift !== "holiday" && (
+                                      <span className="text-xs opacity-75">
+                                        {cellState.hours}
+                                      </span>
+                                    )}
+                                </div>
+
+                                {/* Edit Icon für verfügbare aber ungeplante Schichten */}
+                                {cellState.isClickable &&
+                                  cellState.shift === "off" &&
+                                  !isHoliday &&
+                                  !isWeekend && (
+                                    <Edit className="w-3 h-3 absolute top-1 right-1 text-dsp-orange" />
+                                  )}
+                              </motion.button>
+                            </td>
+                          );
+                        })}
+                        {/* Wochenstunden-Zelle */}
+                        <td
+                          className={`px-4 py-3 text-center align-middle border-l border-gray-200/50 min-w-[130px] ${
+                            isOvertime
+                              ? "bg-red-50 text-red-700"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          <div className="flex flex-col items-center">
+                            <span className="text-sm font-semibold">
+                              {averageWeekly.toFixed(1)}h
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              / {maxHours}h
+                            </span>
+                            {isOvertime && (
+                              <span className="text-xs font-medium text-red-600">
+                                Überstunden!
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -550,144 +714,22 @@ const ScheduleTable = memo(function ScheduleTable({
           )}
         </AnimatePresence>
 
-        {/* Editing Popup - außerhalb der Tabelle */}
-        {editingCell && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50"
-            onClick={handleCancelEdit}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-2xl p-6 shadow-xl border border-gray-200/50 max-w-md w-full mx-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Schicht planen
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mitarbeiter: {editingCell.employee}
-                  </label>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Datum:{" "}
-                    {new Date(editingCell.date).toLocaleDateString("de-DE")}
-                  </label>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Schicht-Art
-                  </label>
-                  <div className="grid grid-cols-1 gap-3">
-                    {/* Custom Zeit - Standard Option */}
-                    <button
-                      onClick={() => {
-                        setTempShift("custom");
-                        if (!tempHours) setTempHours("8");
-                      }}
-                      className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                        tempShift === "custom"
-                          ? "border-blue-400 bg-blue-50 text-blue-800"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <div className="text-center">
-                        <div className="text-lg">⏰</div>
-                        <div className="text-sm font-medium">Flexible Zeit</div>
-                        <div className="text-xs text-gray-500">
-                          Eigene Stunden eingeben
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Vordefinierte Schichten */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => {
-                          setTempShift("morning");
-                          setTempHours("8");
-                        }}
-                        className={`p-3 rounded-xl border-2 transition-all duration-200 ${
-                          tempShift === "morning"
-                            ? "border-yellow-400 bg-yellow-50 text-yellow-800"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="text-lg">☀️</div>
-                          <div className="text-sm font-medium">Frühschicht</div>
-                          <div className="text-xs text-gray-500">
-                            08:00-16:00
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setTempShift("evening");
-                          setTempHours("8");
-                        }}
-                        className={`p-3 rounded-xl border-2 transition-all duration-200 ${
-                          tempShift === "evening"
-                            ? "border-orange-400 bg-orange-50 text-orange-800"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="text-lg">🌅</div>
-                          <div className="text-sm font-medium">Spätschicht</div>
-                          <div className="text-xs text-gray-500">
-                            16:00-00:00
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stunden
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="12"
-                    step="0.5"
-                    value={tempHours}
-                    onChange={(e) => setTempHours(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-dsp-orange focus:border-transparent"
-                    placeholder="8"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {tempShift === "custom"
-                      ? "Geben Sie die gewünschte Stundenzahl ein"
-                      : "Standardwerte können angepasst werden"}
-                  </p>
-                </div>
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    onClick={handleCancelEdit}
-                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors duration-200"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-dsp-orange to-dsp-orange_medium text-white rounded-xl hover:opacity-90 transition-opacity duration-200"
-                  >
-                    Speichern
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
+        {/* Schedule Edit Popup */}
+        <ScheduleEditPopup
+          isOpen={!!editingCell}
+          onClose={handleCancelEdit}
+          onSave={handleSaveEdit}
+          employee={editingCell?.employee || ""}
+          date={editingCell?.date || ""}
+          tempShift={tempShift}
+          setTempShift={setTempShift}
+          tempHours={tempHours}
+          setTempHours={setTempHours}
+          tempActivity={tempActivity}
+          setTempActivity={setTempActivity}
+          tempGroups={tempGroups}
+          setTempGroups={setTempGroups}
+        />
       </div>
     </div>
   );
