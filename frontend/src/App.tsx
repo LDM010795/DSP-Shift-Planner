@@ -1,14 +1,14 @@
 /**
  * DSP Shift-Planner App
  *
- * Hauptanwendung mit Microsoft Organization Authentication und Employee-Integration
- * Unterstützt Token-Sharing von MP-Portal für Single Sign-On
  */
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings } from "lucide-react";
+import { Settings, LogOut } from "lucide-react";
 import PlannerPage from "./pages/PlannerPage";
+import LoginPage from "./pages/LoginPage";
+import { useAuth } from "./context/AuthContext";
 import TokenReceiver from "./components/TokenReceiver";
 import Toast from "./components/Toast";
 import { type AvailabilityData, type ScheduleData } from "./lib/utils";
@@ -17,7 +17,6 @@ type TabType = "availability" | "schedule";
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>("availability");
-  const [isAdmin, setIsAdmin] = useState(false);
   const [toasts, setToasts] = useState<
     Array<{ id: string; message: string; type: string }>
   >([]);
@@ -29,9 +28,15 @@ function App() {
   );
   const [scheduleData, setScheduleData] = useState<ScheduleData>({});
 
-  // Token-Sharing: Check für MP-Portal Token in URL
+  const { hasShiftPlannerAccess, isLoading, logout, canManageShifts, user } = useAuth();
+
+  // Admin-Rechte werden aus den Benutzerberechtigungen abgeleitet
+  const isAdmin = canManageShifts() || (user?.is_staff ?? false);
+
+  // Token-Sharing: Check für MP-Portal Token in URL (vorher berechnen, kein Hook)
   const urlParams = new URLSearchParams(window.location.search);
-  const hasMpToken = urlParams.has('mp_token') && urlParams.get('source') === 'mp-portal';
+  const hasMpToken =
+    urlParams.has("mp_token") && urlParams.get("source") === "mp-portal";
 
   useEffect(() => {
     const handleShowToast = (event: CustomEvent) => {
@@ -52,6 +57,19 @@ function App() {
   // Zeige TokenReceiver wenn MP-Portal Token vorhanden
   if (hasMpToken) {
     return <TokenReceiver />;
+  }
+
+  // Auth-Guard jetzt NACH allen Hooks
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Lade...
+      </div>
+    );
+  }
+
+  if (!hasShiftPlannerAccess()) {
+    return <LoginPage />;
   }
 
   return (
@@ -75,17 +93,15 @@ function App() {
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Logout */}
               <motion.button
-                onClick={() => setIsAdmin(!isAdmin)}
+                onClick={logout}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isAdmin
-                    ? "bg-gradient-to-r from-dsp-orange to-dsp-orange_medium text-white shadow-md hover:opacity-90"
-                    : "bg-white text-dsp-orange border-2 border-dsp-orange hover:bg-dsp-orange_light"
-                }`}
+                className="p-2 rounded-xl text-sm font-medium bg-white text-gray-600 border-2 border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                title="Abmelden"
               >
-                {isAdmin ? "👑 Admin Modus" : "👤 Mitarbeiter Modus"}
+                <LogOut className="w-4 h-4" />
               </motion.button>
             </div>
           </div>

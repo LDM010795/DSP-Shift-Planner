@@ -80,7 +80,9 @@ export function generateMonthDates(date: Date): string[] {
   const dates: string[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     // Formatiere manuell statt toISOString() zu verwenden um Zeitzonenproblemen vorzubeugen
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(
+      day
+    ).padStart(2, "0")}`;
     dates.push(dateStr);
   }
 
@@ -153,6 +155,8 @@ export type ShiftType = "morning" | "evening" | "off" | "holiday" | "custom";
 export type ScheduleEntry = {
   shift: ShiftType;
   hours: string;
+  activity?: "TA" | "D" | "D/TA" | "";
+  groups?: string;
 };
 
 export type ScheduleData = {
