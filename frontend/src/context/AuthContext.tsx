@@ -133,6 +133,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(EMPLOYEE_KEY);
 
+    // Entferne OAuth-Session-Flag, damit erneute Logins möglich sind
+    sessionStorage.removeItem("shift_planner_oauth_processed");
+
     console.log("🔓 User logged out from Shift-Planner");
   };
 
@@ -148,13 +151,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const canManageShifts = (): boolean => {
-    // Zusätzliche Berechtigung für Schichtmanagement
-    // Kann später erweitert werden (z.B. basierend auf Position oder Department)
-    const isManagerPosition =
-      employee?.position?.title?.includes("Manager") ?? false;
-    return (
-      hasShiftPlannerAccess() && (user?.is_staff === true || isManagerPosition)
-    );
+    // Flexible Admin-Erkennung basierend auf Positionstitel ODER is_staff Flag
+    const positionTitle = employee?.position?.title?.toLowerCase() ?? "";
+    const isAdminPosition = positionTitle.includes("admin");
+
+    const result = hasShiftPlannerAccess() && (user?.is_staff === true || isAdminPosition);
+
+    // Debug-Logs für Analyse im Browser-Console
+    /* eslint-disable no-console */
+    console.log("[SHIFT-DEBUG] Auth check:", {
+      user,
+      employee,
+      positionTitle,
+      is_staff: user?.is_staff,
+      isAdminPosition,
+      result,
+    });
+    /* eslint-enable no-console */
+
+    return result;
   };
 
   const contextValue: AuthContextType = {

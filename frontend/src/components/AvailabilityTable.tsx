@@ -1,7 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, memo, useCallback } from "react";
+import { useState, memo } from "react";
 import {
-  Save,
   Download,
   Upload,
   Calendar,
@@ -24,12 +23,13 @@ interface AvailabilityTableProps {
     date: string,
     status: "available" | "unavailable"
   ) => void;
+  currentUser: string;
+  isAdmin: boolean;
   currentTab: "availability" | "schedule";
   onTabChange: (tab: "availability" | "schedule") => void;
   currentMonth: Date;
   onMonthChange: (direction: "prev" | "next") => void;
-  onSave: () => void;
-  isSaving: boolean;
+  // Speichern entfernt – Props nicht mehr benötigt
 }
 
 const AvailabilityTable = memo(function AvailabilityTable({
@@ -41,8 +41,9 @@ const AvailabilityTable = memo(function AvailabilityTable({
   onTabChange,
   currentMonth,
   onMonthChange,
-  onSave,
-  isSaving,
+  // Speichern entfernt – Props nicht mehr benötigt
+  currentUser,
+  isAdmin,
 }: AvailabilityTableProps) {
   const [showLegend, setShowLegend] = useState(false);
 
@@ -150,14 +151,6 @@ const AvailabilityTable = memo(function AvailabilityTable({
             <button className="flex items-center space-x-1 px-3 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200">
               <Download className="w-3 h-3" />
               <span>Export</span>
-            </button>
-            <button
-              onClick={onSave}
-              disabled={isSaving}
-              className="flex items-center space-x-1 px-3 py-1.5 text-xs bg-gradient-to-r from-dsp-orange to-dsp-orange_medium text-white rounded-lg hover:shadow-md transition-all duration-200 disabled:opacity-50"
-            >
-              <Save className="w-3 h-3" />
-              <span>{isSaving ? "..." : "Speichern"}</span>
             </button>
           </div>
         </div>
@@ -316,7 +309,11 @@ const AvailabilityTable = memo(function AvailabilityTable({
                   {employees.map((employee, employeeIndex) => (
                     <tr
                       key={employee}
-                      className="hover:bg-gray-50/50 transition-colors duration-200"
+                      className={`transition-colors duration-200 ${
+                        employee === currentUser
+                          ? "bg-dsp-orange/10 hover:bg-dsp-orange/20"
+                          : "hover:bg-dsp-orange/5"
+                      }`}
                     >
                       <td className="sticky left-0 z-10 bg-white/90 backdrop-blur-sm px-6 py-4 text-sm font-medium text-gray-900 border-r border-gray-200/50">
                         <div className="flex items-center space-x-3">
@@ -350,55 +347,50 @@ const AvailabilityTable = memo(function AvailabilityTable({
                           >
                             <motion.button
                               onClick={() => {
-                                // Wochenenden und Feiertage sind nicht klickbar
                                 if (isWeekend || isHoliday) return;
-
-                                onAvailabilityChange(
-                                  employee,
-                                  date,
-                                  getNextStatus(status)
-                                );
+                                const canEdit = isAdmin || employee === currentUser;
+                                if (canEdit) {
+                                  onAvailabilityChange(
+                                    employee,
+                                    date,
+                                    getNextStatus(status)
+                                  );
+                                }
                               }}
                               whileHover={
                                 !isWeekend && !isHoliday
                                   ? {
-                                      scale: 1.05,
-                                      y: -1,
+                                      scale: (isAdmin || employee === currentUser) ? 1.05 : 1,
+                                      y: (isAdmin || employee === currentUser) ? -1 : 0,
                                     }
                                   : {}
                               }
                               whileTap={
-                                !isWeekend && !isHoliday ? { scale: 0.95 } : {}
+                                !isWeekend && !isHoliday && (isAdmin || employee === currentUser)
+                                  ? { scale: 0.95 }
+                                  : {}
                               }
                               className={`w-full h-10 rounded-xl border-2 transition-all duration-200 flex items-center justify-center font-bold text-sm shadow-sm ${
-                                !isWeekend && !isHoliday
+                                !isWeekend && !isHoliday && (isAdmin || employee === currentUser)
                                   ? "hover:shadow-md"
                                   : ""
                               } ${getStatusColor(
                                 status,
                                 isWeekend,
                                 isHoliday
-                              )}`}
+                              )} ${
+                                !(isAdmin || employee === currentUser) &&
+                                !isWeekend &&
+                                !isHoliday
+                                  ? "cursor-not-allowed opacity-60"
+                                  : ""
+                              }`}
                               title={
                                 isHoliday
-                                  ? `${employee} - ${new Date(
-                                      date
-                                    ).toLocaleDateString(
-                                      "de-DE"
-                                    )}: ${holidayName} (Feiertag)`
+                                  ? `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: ${holidayName} (Feiertag)`
                                   : isWeekend
-                                  ? `${employee} - ${new Date(
-                                      date
-                                    ).toLocaleDateString(
-                                      "de-DE"
-                                    )}: Wochenende (nicht verfügbar)`
-                                  : `${employee} - ${new Date(
-                                      date
-                                    ).toLocaleDateString("de-DE")}: ${
-                                      status === "available"
-                                        ? "Verfügbar"
-                                        : "Nicht verfügbar"
-                                    } - Klicken zum Ändern`
+                                  ? `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: Wochenende (nicht verfügbar)`
+                                  : `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: ${status === "available" ? "Verfügbar" : "Nicht verfügbar"}`
                               }
                               disabled={isWeekend || isHoliday}
                             >
