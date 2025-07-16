@@ -11,8 +11,7 @@ import {
   Info,
 } from "lucide-react";
 import type { AvailabilityData } from "../lib/utils";
-import { isBerlinHoliday, getHolidayName, isWeekend } from "../lib/utils";
-import { useShallowCallback } from "../lib/performanceUtils";
+import { isBerlinHoliday, getHolidayName } from "../lib/utils";
 
 interface AvailabilityTableProps {
   employees: string[];
@@ -26,7 +25,6 @@ interface AvailabilityTableProps {
   currentUser: string;
   isAdmin: boolean;
   currentTab: "availability" | "schedule";
-  onTabChange: (tab: "availability" | "schedule") => void;
   currentMonth: Date;
   onMonthChange: (direction: "prev" | "next") => void;
   // Speichern entfernt – Props nicht mehr benötigt
@@ -38,7 +36,6 @@ const AvailabilityTable = memo(function AvailabilityTable({
   availabilityData,
   onAvailabilityChange,
   currentTab,
-  onTabChange,
   currentMonth,
   onMonthChange,
   // Speichern entfernt – Props nicht mehr benötigt
@@ -306,7 +303,7 @@ const AvailabilityTable = memo(function AvailabilityTable({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50">
-                  {employees.map((employee, employeeIndex) => (
+                  {employees.map((employee) => (
                     <tr
                       key={employee}
                       className={`transition-colors duration-200 ${
@@ -348,7 +345,8 @@ const AvailabilityTable = memo(function AvailabilityTable({
                             <motion.button
                               onClick={() => {
                                 if (isWeekend || isHoliday) return;
-                                const canEdit = isAdmin || employee === currentUser;
+                                const canEdit =
+                                  isAdmin || employee === currentUser;
                                 if (canEdit) {
                                   onAvailabilityChange(
                                     employee,
@@ -360,18 +358,28 @@ const AvailabilityTable = memo(function AvailabilityTable({
                               whileHover={
                                 !isWeekend && !isHoliday
                                   ? {
-                                      scale: (isAdmin || employee === currentUser) ? 1.05 : 1,
-                                      y: (isAdmin || employee === currentUser) ? -1 : 0,
+                                      scale:
+                                        isAdmin || employee === currentUser
+                                          ? 1.05
+                                          : 1,
+                                      y:
+                                        isAdmin || employee === currentUser
+                                          ? -1
+                                          : 0,
                                     }
                                   : {}
                               }
                               whileTap={
-                                !isWeekend && !isHoliday && (isAdmin || employee === currentUser)
+                                !isWeekend &&
+                                !isHoliday &&
+                                (isAdmin || employee === currentUser)
                                   ? { scale: 0.95 }
                                   : {}
                               }
                               className={`w-full h-10 rounded-xl border-2 transition-all duration-200 flex items-center justify-center font-bold text-sm shadow-sm ${
-                                !isWeekend && !isHoliday && (isAdmin || employee === currentUser)
+                                !isWeekend &&
+                                !isHoliday &&
+                                (isAdmin || employee === currentUser)
                                   ? "hover:shadow-md"
                                   : ""
                               } ${getStatusColor(
@@ -387,10 +395,24 @@ const AvailabilityTable = memo(function AvailabilityTable({
                               }`}
                               title={
                                 isHoliday
-                                  ? `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: ${holidayName} (Feiertag)`
+                                  ? `${employee} - ${new Date(
+                                      date
+                                    ).toLocaleDateString(
+                                      "de-DE"
+                                    )}: ${holidayName} (Feiertag)`
                                   : isWeekend
-                                  ? `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: Wochenende (nicht verfügbar)`
-                                  : `${employee} - ${new Date(date).toLocaleDateString("de-DE")}: ${status === "available" ? "Verfügbar" : "Nicht verfügbar"}`
+                                  ? `${employee} - ${new Date(
+                                      date
+                                    ).toLocaleDateString(
+                                      "de-DE"
+                                    )}: Wochenende (nicht verfügbar)`
+                                  : `${employee} - ${new Date(
+                                      date
+                                    ).toLocaleDateString("de-DE")}: ${
+                                      status === "available"
+                                        ? "Verfügbar"
+                                        : "Nicht verfügbar"
+                                    }`
                               }
                               disabled={isWeekend || isHoliday}
                             >

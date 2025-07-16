@@ -229,7 +229,8 @@ export default function PlannerPage({
     }
 
     // Wochenende-Sonderfall: Admin darf planen auch ohne Verfügbarkeit
-    const isWeekendDay = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
+    const isWeekendDay =
+      new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
 
     if (!isWeekendDay) {
       // Für Werktage weiterhin Verfügbarkeitsprüfung
@@ -410,7 +411,6 @@ export default function PlannerPage({
               availabilityData={availabilityData}
               onAvailabilityChange={handleAvailabilityChange}
               currentTab={currentTab}
-              onTabChange={onTabChange}
               currentMonth={currentMonth}
               onMonthChange={changeMonth}
               currentUser={currentUserFullName}
@@ -449,7 +449,6 @@ export default function PlannerPage({
               isAdmin={isAdmin}
               currentUser={currentUserFullName}
               currentTab={currentTab}
-              onTabChange={onTabChange}
               currentMonth={currentMonth}
               onMonthChange={changeMonth}
             />
