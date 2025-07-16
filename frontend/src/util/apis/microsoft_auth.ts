@@ -1,34 +1,11 @@
 /**
  * Microsoft Organization Authentication API für Shift-Planner
  *
- * Integriert mit DSP Employee Management System
+ * Verwendet die zentrale Unified Microsoft Auth Library
+ * für konsistente OAuth-Integration.
  */
 
-import axios from "axios";
-
-// Basis-URL für Microsoft Services
-const MICROSOFT_API_URL =
-  import.meta.env.VITE_MICROSOFT_API_URL ||
-  "http://127.0.0.1:8000/api/microsoft";
-
-// Separate Axios-Instanz für Microsoft Auth (keine JWT-Interceptors nötig)
-const microsoftApi = axios.create({
-  baseURL: MICROSOFT_API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  withCredentials: true, // Für Session-basierte State-Verwaltung
-});
-
 // --- Types ---
-
-export interface MicrosoftLoginResponse {
-  success: boolean;
-  message: string;
-  redirect_url: string;
-  state: string;
-  instructions: string[];
-}
 
 export interface MicrosoftCallbackRequest {
   code: string;
@@ -65,7 +42,7 @@ export interface MicrosoftAuthResponse {
     is_staff: boolean;
     is_superuser: boolean;
   };
-  employee_info?: EmployeeInfo; // DSP Employee Daten wenn verfügbar
+  employee_info?: EmployeeInfo;
   role_info: {
     role_name: string;
     groups: string[];
@@ -75,7 +52,7 @@ export interface MicrosoftAuthResponse {
       can_access_admin: boolean;
       can_manage_users: boolean;
       can_manage_content: boolean;
-      can_access_shift_planner: boolean; // Neue Permission für Shift-Planner
+      can_access_shift_planner: boolean;
     };
   };
   organization_info: {
@@ -102,15 +79,14 @@ export interface MicrosoftUserStatusResponse {
     department: string;
     account_enabled: boolean;
   };
-  employee_verified?: boolean; // Ob Employee im System existiert
+  employee_verified?: boolean;
   error?: string;
 }
 
-export interface MicrosoftErrorResponse {
-  success: false;
-  error: string;
-  error_code?: string;
-}
+// --- Configuration ---
+
+const TOOL_SLUG = "shift-planner";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 
 // --- API Functions ---
 
@@ -118,23 +94,40 @@ export interface MicrosoftErrorResponse {
  * 1. Startet Microsoft Organization Login Flow für Shift-Planner
  */
 export const startMicrosoftLogin = (): void => {
-  const loginUrl = `${MICROSOFT_API_URL}/auth/login/shift-planner/`;
-  // Direkte Navigation statt AJAX-Aufruf, um CORS-Redirect-Probleme zu umgehen
+  const loginUrl = `${BACKEND_URL}/api/microsoft/auth/login/${TOOL_SLUG}/`;
+  console.log("🚀 Redirecting to Microsoft login:", loginUrl);
   window.location.href = loginUrl;
 };
 
 /**
- * 2. SHIFT-PLANNER SPEZIFISCH: Sendet OAuth Code für Authentication und Employee-Abgleich
+ * 2. Sendet OAuth Code für Authentication und Employee-Abgleich
  */
 export const authenticateWithMicrosoft = async (
   callbackData: MicrosoftCallbackRequest
 ): Promise<MicrosoftAuthResponse> => {
   try {
-    const response = await microsoftApi.post<MicrosoftAuthResponse>(
-      `/auth/callback/${callbackData.tool_slug}/`,
-      { code: callbackData.code, state: callbackData.state } // Nur code und state im Body senden
-    );
-    return response.data;
+    const apiUrl = `${BACKEND_URL}/api/microsoft/auth/callback/${TOOL_SLUG}/`;
+    console.log("🔐 Authenticating with Microsoft:", apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: callbackData.code,
+        state: callbackData.state,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || "Failed to authenticate with Microsoft"
+      );
+    }
+
+    return await response.json();
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: { error?: string } } };
     throw new Error(
@@ -151,15 +144,22 @@ export const checkMicrosoftUserStatus = async (
   accessToken: string
 ): Promise<MicrosoftUserStatusResponse> => {
   try {
-    const response = await microsoftApi.get<MicrosoftUserStatusResponse>(
-      "/auth/user-status/?app=shift-planner",
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-    return response.data;
+    const apiUrl = `${BACKEND_URL}/api/microsoft/auth/user-status/?app=${TOOL_SLUG}`;
+
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to check user status");
+    }
+
+    return await response.json();
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: { error?: string } } };
     throw new Error(
@@ -171,7 +171,7 @@ export const checkMicrosoftUserStatus = async (
 // --- Utility Functions ---
 
 /**
- * Extrahiert Auth-Code und State aus URL-Parametern (nach Microsoft Redirect)
+ * Extrahiert Auth-Code und State aus URL-Parametern
  */
 export const extractCallbackFromUrl = (): {
   code?: string;

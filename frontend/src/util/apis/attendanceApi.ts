@@ -1,8 +1,8 @@
 import axios from "axios";
 import dayjs from "dayjs";
-import type { EmployeeInfo } from "./microsoft_auth";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
 
 const attendanceApi = axios.create({
   baseURL: `${API_BASE_URL}/employees`,
@@ -35,7 +35,9 @@ export const fetchAttendances = async (
 ): Promise<Attendance[]> => {
   const params: Record<string, string | number> = { month, year };
   if (department) params.department = department;
-  const res = await attendanceApi.get<Attendance[]>("/attendances/", { params });
+  const res = await attendanceApi.get<Attendance[]>("/attendances/", {
+    params,
+  });
   return res.data;
 };
 
@@ -50,7 +52,10 @@ export const updateAttendance = async (
   id: number,
   payload: Partial<AttendanceCreate>
 ): Promise<Attendance> => {
-  const res = await attendanceApi.patch<Attendance>(`/attendances/${id}/`, payload);
+  const res = await attendanceApi.patch<Attendance>(
+    `/attendances/${id}/`,
+    payload
+  );
   return res.data;
 };
 
@@ -62,4 +67,4 @@ export const getMonthRange = (date: Date): { start: Date; end: Date } => {
   const start = dayjs(date).startOf("month").toDate();
   const end = dayjs(date).endOf("month").toDate();
   return { start, end };
-}; 
+};

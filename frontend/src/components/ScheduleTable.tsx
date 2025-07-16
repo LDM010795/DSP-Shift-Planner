@@ -10,7 +10,7 @@ import {
 import { useState, memo, useCallback } from "react";
 import type { ScheduleData, AvailabilityData } from "../lib/utils";
 import { isBerlinHoliday, getHolidayName, isWeekend } from "../lib/utils";
-import { useShallowCallback } from "../lib/performanceUtils";
+
 import ScheduleEditPopup from "./ScheduleEditPopup";
 
 interface ScheduleTableProps {
@@ -30,7 +30,7 @@ interface ScheduleTableProps {
   isAdmin: boolean;
   currentUser: string;
   currentTab: "availability" | "schedule";
-  onTabChange: (tab: "availability" | "schedule") => void;
+
   currentMonth: Date;
   onMonthChange: (direction: "prev" | "next") => void;
 }
@@ -45,7 +45,6 @@ const ScheduleTable = memo(function ScheduleTable({
   isAdmin,
   currentUser,
   currentTab,
-  onTabChange,
   currentMonth,
   onMonthChange,
 }: ScheduleTableProps) {
@@ -101,63 +100,6 @@ const ScheduleTable = memo(function ScheduleTable({
     }
   };
 
-  const getShiftIcon = (
-    shift: "morning" | "evening" | "off" | "holiday" | "custom"
-  ) => {
-    switch (shift) {
-      case "morning":
-        return "☀️";
-      case "evening":
-        return "🌅";
-      case "holiday":
-        return "🎉";
-      case "custom":
-        return "⏰";
-      case "off":
-        return "-";
-      default:
-        return "-";
-    }
-  };
-
-  const getNextShift = (
-    current: "morning" | "evening" | "off" | "holiday" | "custom"
-  ): "morning" | "evening" | "off" | "holiday" | "custom" => {
-    switch (current) {
-      case "morning":
-        return "evening";
-      case "evening":
-        return "custom";
-      case "custom":
-        return "off";
-      case "off":
-        return "morning";
-      case "holiday":
-        return "holiday"; // Feiertage bleiben Feiertage
-      default:
-        return "morning";
-    }
-  };
-
-  const getShiftHours = (
-    shift: "morning" | "evening" | "off" | "holiday" | "custom"
-  ) => {
-    switch (shift) {
-      case "morning":
-        return "8h";
-      case "evening":
-        return "8h";
-      case "custom":
-        return "0h"; // Wird vom User eingegeben
-      case "off":
-        return "0h";
-      case "holiday":
-        return "0h";
-      default:
-        return "0h";
-    }
-  };
-
   // HINZUFÜGUNG: Stunden-Mapping & Helfer für Überstunden-Berechnung
   const SHIFT_HOURS: Record<
     "morning" | "evening" | "off" | "holiday" | "custom",
@@ -178,29 +120,6 @@ const ScheduleTable = memo(function ScheduleTable({
     const monday = new Date(date);
     monday.setDate(date.getDate() - diff);
     return monday.toISOString().split("T")[0];
-  };
-
-  const calculateWeeklyTotals = (employee: string): number[] => {
-    const empSchedule = scheduleData[employee] || {};
-    const weeklyTotals: Record<string, number> = {};
-
-    dates.forEach((dateStr) => {
-      const schedule = empSchedule[dateStr];
-      let hours = 0;
-      if (schedule) {
-        if (schedule.shift === "custom") {
-          const parsed = parseFloat(schedule.hours);
-          if (!isNaN(parsed)) hours = parsed;
-        } else {
-          hours = SHIFT_HOURS[schedule.shift] ?? 0;
-        }
-      }
-
-      const weekKey = getWeekKey(dateStr);
-      weeklyTotals[weekKey] = (weeklyTotals[weekKey] || 0) + hours;
-    });
-
-    return Object.values(weeklyTotals);
   };
 
   const getMaxHours = (employee: string): number => {
@@ -538,7 +457,7 @@ const ScheduleTable = memo(function ScheduleTable({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50">
-                  {employees.map((employee, employeeIndex) => {
+                  {employees.map((employee) => {
                     // Map WeekKey -> hours to ermitteln, welche Wochen Überstunden haben
                     const weekHours: Record<string, number> = {};
                     dates.forEach((d) => {
